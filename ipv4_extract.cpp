@@ -9,6 +9,19 @@
 // as a valid dotted-quad (each octet 0-255), optionally followed by ":<port>"
 // (port 0-65535), is returned.
 //
+// Additional rule for ports: the port digits must be a *continuous* run.
+// The only clean boundary after a port is whitespace (space, tab, newline,
+// carriage return) or the end of the string. If any non-digit character
+// (letter, comma, underscore, punctuation, etc.) appears after the port
+// digits and *more digits* follow before the next whitespace/end, the port
+// was interrupted and the whole match is rejected. Examples:
+//   "10.0.0.255:8080end"    -> accepted (trailing letters only, no digits)
+//   "10.0.0.1:80 stuff 42"  -> accepted (whitespace boundary before "42")
+//   "10.0.0.1:8a0"          -> rejected ('a' between digits)
+//   "10.0.0.1:80,42"        -> rejected (',' between digits, no whitespace)
+//   "10.0.0.1:80abc42"      -> rejected (letters between digits)
+// Octets can't suffer this problem because '.' is a token character.
+//
 // All numeric parsing is done manually. None of these are used:
 //   atoi, atol, atoll, strtol, strtoul, strtod, stoi, stol, stoul,
 //   sscanf, inet_aton, inet_pton, inet_addr, or any regex library.
@@ -23,6 +36,13 @@ static bool isDigitChar(char c) {
 
 static bool isTokenChar(char c) {
     return isDigitChar(c) || c == '.' || c == ':';
+}
+
+// Whitespace / end-of-line characters. These (and end-of-string) are the
+// only "clean" boundaries after a port: any non-whitespace, non-digit
+// character followed by more digits is treated as an interruption.
+static bool isWhitespaceChar(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 // Attempts to parse a single token (a run of digits/'.'/':') as either
@@ -127,12 +147,28 @@ bool extractIPv4(const std::string& str, unsigned long& outAddress, int& outPort
         unsigned long octets[4] = {0, 0, 0, 0};
         int port = -1;
         if (parseToken(token, octets, port)) {
-            outAddress = (octets[0] << 24) |
-                         (octets[1] << 16) |
-                         (octets[2] <<  8) |
-                          octets[3];
-            outPort = port;
-            return true;
+            // Continuous-port check: after the port digits, scan forward in
+            // the source until we hit whitespace or end-of-string. If any
+            // digit appears in that window, the port digits were
+            // interrupted (by letters, commas, punctuation, etc.) and the
+            // match is rejected. Whitespace or end-of-string right after
+            // the token is a clean boundary, so ports followed by pure
+            // trailing garbage like "end" stay accepted.
+            bool portBrokenByGarbage = false;
+            if (port >= 0) {
+                for (size_t j = i; j < n; ++j) {
+                    if (isWhitespaceChar(str[j])) break;
+                    if (isDigitChar(str[j])) { portBrokenByGarbage = true; break; }
+                }
+            }
+            if (!portBrokenByGarbage) {
+                outAddress = (octets[0] << 24) |
+                             (octets[1] << 16) |
+                             (octets[2] <<  8) |
+                              octets[3];
+                outPort = port;
+                return true;
+            }
         }
         // Otherwise, keep scanning for the next token.
     }

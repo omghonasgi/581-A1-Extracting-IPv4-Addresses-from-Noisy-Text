@@ -76,9 +76,25 @@ int main() {
         {"port",          "6 digits (too many)",              "10.0.0.1:100000",                false, "",                -1},
         {"port",          "empty (trailing colon)",           "10.0.0.1:",                      false, "",                -1},
         {"port",          "double colon",                     "10.0.0.1:80:9",                  false, "",                -1},
-        // 'a' is not a token char, so it splits the token at 'a'; the first
-        // half "10.0.0.1:8" is a fully valid IP+port and is returned.
-        {"port",          "letter splits token (leftover)",   "10.0.0.1:8a0",                   true,  "10.0.0.1",        8},
+        // Port digits must be *continuous* in the source: 'a' interrupts the
+        // port digits and a further digit '0' follows before a clean break,
+        // so the whole match is rejected (rather than accepting port 8).
+        {"port",          "letter interrupts port digits",    "10.0.0.1:8a0",                   false, "",                -1},
+        // Trailing all-alpha garbage after a complete port is fine.
+        {"port",          "trailing alpha garbage ok",        "10.0.0.255:8080end",             true,  "10.0.0.255",      8080},
+        // Same idea, but the trailer contains a digit AFTER letters -> reject.
+        {"port",          "letters then digits after port",   "10.0.0.1:80abc42",               false, "",                -1},
+        // Letters only after the port digits: still fine (like "8080end").
+        {"port",          "letters only after port",          "10.0.0.1:80abc",                 true,  "10.0.0.1",        80},
+        // A comma between port digits is still an interruption: only
+        // whitespace (or end-of-string) is a clean boundary.
+        {"port",          "comma between port digits",        "10.0.0.1:80,42",                 false, "",                -1},
+        // Comma after the port with NO further digits is fine.
+        {"port",          "comma then non-digits",            "10.0.0.1:80,end",                true,  "10.0.0.1",        80},
+        // Whitespace IS a clean boundary: '42' after a space is unrelated.
+        {"port",          "space boundary before more digits","10.0.0.1:80 stuff 42",           true,  "10.0.0.1",        80},
+        // Tab is whitespace too.
+        {"port",          "tab boundary before more digits",  "10.0.0.1:80\tstuff 42",          true,  "10.0.0.1",        80},
 
         // --- octets out of range -----------------------------------------
         {"octet range",   "256 (first)",                      "256.1.1.1",                      false, "",                -1},
