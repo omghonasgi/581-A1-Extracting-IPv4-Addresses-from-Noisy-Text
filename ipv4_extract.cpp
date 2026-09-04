@@ -44,6 +44,10 @@ static bool parseToken(const std::string& token,
     for (; p < tn; ++p) {
         char c = token[p];
         if (isDigitChar(c)) {
+            // Reject leading zeros: an octet may be "0" but not "00", "07", "092", etc.
+            // If we already have exactly one digit and its value is 0, the octet
+            // started with '0', so any additional digit makes it invalid.
+            if (digitCount == 1 && currentValue == 0) return false;
             ++digitCount;
             if (digitCount > 3) return false;              // >3 digits in an octet
             currentValue = currentValue * 10UL +
@@ -84,12 +88,16 @@ static bool parseToken(const std::string& token,
         return true;
     }
 
-    // We just consumed the ':'. There must be 1..5 digits and nothing else.
+    // We just consumed the ':'. There must be 1..5 digits and nothing else,
+    // no leading zeros (port may be "0" but not "00", "080", "007", etc.),
+    // and the numeric value must fit in 0..65535.
     unsigned long portValue = 0;
     int portDigits = 0;
     for (; p < tn; ++p) {
         char c = token[p];
         if (!isDigitChar(c)) return false;                 // e.g. "1.2.3.4:80:9"
+        // Reject leading zeros in the port, same rule as octets.
+        if (portDigits == 1 && portValue == 0) return false;
         ++portDigits;
         if (portDigits > 5) return false;
         portValue = portValue * 10UL +
@@ -132,6 +140,9 @@ bool extractIPv4(const std::string& str, unsigned long& outAddress, int& outPort
     return false;
 }
 
+// Define IPV4_EXTRACT_NO_MAIN before including this file to reuse extractIPv4
+// from a test driver without duplicating its implementation.
+#ifndef IPV4_EXTRACT_NO_MAIN
 int main() {
     std::string line;
     while (true) {
@@ -162,3 +173,4 @@ int main() {
     }
     return 0;
 }
+#endif // IPV4_EXTRACT_NO_MAIN
