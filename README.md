@@ -41,6 +41,9 @@ The assistant first piped a large batch of inputs through the compiled program i
   - The `#ifndef IPV4_EXTRACT_NO_MAIN` guard around `main()`.
   - The entire contents of `test_ipv4_extract.cpp` (currently 54 cases, all passing).
 
+### Verification Statement
+I understand every line of the code submitted here. In addition to the test cases provided in the test file, I also tested this program with manual test cases. After all the necessary changes outlined, all the test cases passed as expected. Some limitations of this program include the fact that the program cannot deduce what is exactly wrong with a given IP address - it merely returns if the IP address is invalid. This program could be improved if it informed the user what exactly was wrong with their input.
+
 ## Build and run
 
 ```shell
